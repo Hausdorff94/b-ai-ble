@@ -1,9 +1,6 @@
-import boto3
-import json
-
 from utils.utils import (
-    read_json_from_s3, 
-    list_directories, 
+    read_json_from_s3,
+    list_directories,
     upload_to_s3,
     list_files,
     write_to_json)

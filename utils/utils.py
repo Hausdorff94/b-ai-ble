@@ -1,6 +1,10 @@
 import json
 import boto3
 import logging
+import os
+from IPython import display
+from base64 import b64decode
+import base64
 
 logging.basicConfig(filename='utils.log', level=logging.INFO, format='%(asctime)s:%(levelname)s:%(message)s')
 logger = logging.getLogger(__name__)
@@ -90,8 +94,6 @@ def list_directories(bucket_name, prefix):
         print(f"Error listing directories in S3: {str(e)}")
         return []
 
-import boto3
-
 def list_files(bucket_name, prefix=''):
     """
     List files (objects) within a specific directory (prefix) in an S3 bucket.
@@ -117,3 +119,110 @@ def list_files(bucket_name, prefix=''):
     except Exception as e:
         print(f"Error listing files in S3: {str(e)}")
         return []
+
+def generate_ai_text(
+    bedrock_runtime: any,
+    customer_input: str,
+    prompt: str,
+    modelId: str = "meta.llama2-13b-chat-v1",
+    accept: str = "application/json",
+    contentType: str = "application/json",
+    temperature: float = 0.9,
+    top_p: float = 0.9,
+    max_gen_len: int = 512
+):
+    final_prompt = f"""{customer_input}. {prompt}."""
+
+    body = json.dumps(
+        {
+            "prompt": final_prompt,
+            "temperature": temperature,
+            "top_p": top_p,
+            "max_gen_len": max_gen_len
+        }
+    )
+    response = bedrock_runtime.invoke_model(
+        body=body,
+        modelId=modelId,
+        accept=accept,
+        contentType=contentType
+    )
+    response_body = json.loads(response.get("body").read())
+    model_response = response_body.get("generation")
+    list_response = [
+        s.strip() for s in (
+            list(filter(None, model_response.splitlines()))[:-1]
+        )
+    ]
+    return model_response, list_response
+
+def save_base64_image(
+    base64_string: str,
+    output_path: str = './data/',
+    seed: int = None
+    ):
+
+    # Decode base64 string into bytes
+    image_bytes = base64.b64decode(base64_string)
+
+    # Write the bytes to a file
+
+    with open(f"{output_path}output_image_{seed}.png", 'wb') as f:
+        f.write(image_bytes)
+
+def generate_ai_image(
+    bedrock_runtime: any,
+    style: str,
+    verse: str = "",
+    modelId: str = "stability.stable-diffusion-xl",
+    style_preset: str = "photographic",
+    negative_prompt: str = "",
+    weight: float = 1.0,
+    cfg_scale: int = 10,
+    seed: int = 9936,
+    steps: int = 70,
+    width: int = 512,
+    height: int = 512
+):
+    os.makedirs("data", exist_ok=True)
+    if len(style) > 0:
+        request = json.dumps(
+            {
+                "text_prompts": (
+                    [
+                        {
+                            "text": f"""
+                                        A scene of {style}
+                                    """,
+                            "weight": weight
+                        },
+                        {
+                            "text": f"""
+                                    A scene of {negative_prompt}
+                                    """,
+                            "weight": -10
+                        }
+                    ]
+                ),
+                "cfg_scale": cfg_scale,
+                "seed": seed,
+                "steps": steps,
+                "style_preset": style_preset,
+                "height": height
+            }
+        )
+        response = bedrock_runtime.invoke_model(
+            body=request,
+            modelId=modelId
+        )
+        response_body = json.loads(
+            response.get("body").read()
+        )
+        base_64_img_str = response_body["artifacts"][0].get("base64")
+        display.display(
+            display.Image(
+                b64decode(base_64_img_str),
+                width=width
+            )
+        )
+        save_base64_image(base_64_img_str, seed=seed)
