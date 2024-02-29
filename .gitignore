@@ -161,4 +161,4 @@ cython_debug/
 
 # Data Bible API
 bible-api/
-data.*
+data.**
