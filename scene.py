@@ -7,6 +7,7 @@ from utils.utils import (
     generate_ai_text)
 
 from utils_br import bedrock
+import os
 
 
 def set_environment():
